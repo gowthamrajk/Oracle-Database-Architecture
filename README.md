@@ -4,6 +4,9 @@ In This module, I will be adding some Oracle Database Architecture Overview & co
 
 ### For more such developments, visit my [Portfolio](https://gowthamrajk.github.io)
 
+<img width="475" alt="oracle architecture" src="https://user-images.githubusercontent.com/43011442/150145853-cadcdb64-5def-4c89-9e98-a789f50d4a76.PNG">
+
+
 <br>
 
 **For more queries, reach me through gowthamraj692@gmail.com or whatsapp @ 9698382306** 🌐
