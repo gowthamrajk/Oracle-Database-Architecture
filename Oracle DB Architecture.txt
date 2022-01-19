@@ -1,0 +1,221 @@
+
+
+Oracle Database Architecture : 
+
+-> A single-instance database architecture consists of one database instance and one database. 
+-> A one-to-one relationship exists between the database and the database instance. 
+-> Multiple single-instance databases can be installed on the same server machine. 
+-> There are separate database instances for each database. 
+-> This configuration is useful to run different versions of Oracle Database on the same machine.
+-> An Oracle Real Application Clusters (Oracle RAC) database architecture consists of multiple instances that run on 
+   separate server machines. All of them share the same database. 
+-> The cluster of server machines appear as a single server on one end, and end users and applications on the other end. 
+
+************************************************************************************************************************************************************
+
+Initial connection process =>
+
+-> Any New Incomming Connection will be handled by a listener. user passes the database details, host name, port name, etc...
+   A new Server Process is created for each individual client/connection.
+-> The purpose of the listener is to check for the connection request and establish connection to the database.
+-> The Listener will check and verify whether the user is authorized or not and if its authorized, then the client can directly
+   interact with the Server Process. 
+-> Listener will do those authorizations with the help of PMON background process which helps to register the database 
+   service details.The server process will be responsible for fetching data for the queries which are raised by client.
+-> Based upon the server connection mode, the server process will be created 1 for each client connection. (if 10 client conn,
+   10 server process will be created). The modes can be DEDICATED or SHARED server connection.
+   DEDICATED => 1 SP for each Conn.
+   SHARED => 1 SP for all the Conn(shared between the connections based on our configuration)
+
+
+-> Architectural Components : -> Instances (PGA & SGA) => contains memory and background process components.
+                              -> Database 
+
+-> This shared server process will be handled by PGA(Program Global Area) -> not sharable accross the connection (dedicated 
+   to a particular user connection)
+-> SGA (Shared Global Area) -> shareable between the connections.
+
+-> 3 main components of the architecture are (memory, background process, database)
+
+************************************************************************************************************************************************************
+
+Memory Component : 
+
+-> SGA memory => shared Pool, Java Pool, streams Pool, Large Pool, DB Buffer cache, Redo Log buffer.
+
+1) Shared Pool => It has two components i) Library Cache
+                                       ii) Data Dictionary Cache/Row Cache
+
+   -> Library Cache => has all the past SQL query history and its details, SQL area, etc...
+                       All the executable blocks such as sql, plsql are kept here..
+                       (A sql comes from the user session, undergoes a parse, generates a hash value, and the optimizer generates
+                        an execution plan and execute the statement, fetch results in the execution area. If the same query is 
+                        fired again, it reuses the already parsed result and uses it)
+   -> Data Dictionary Cache => has all the database objects information like tables, view, etc...
+
+2) Large Pool => when ever there is a backup and recovery (RMAN), the memory from the large pool will be assigned to it.
+                 Used for Parallel processing also.
+                 comes into use when we set up shared server mode.
+
+3) Java Pool => whenever we install the JVM or do java activities, the memory will be taken from the Java pool.
+
+4) Streams Pool => whenever there is a oracle stream process/oracle replication process runs, the streams pool memory will be taken.
+
+5) DB Buffer Cache => whenever a new data is written/update to the database, it will be return to this memory block.
+                      whenever a client access some data from the database, that data will be again return back to this buffer cache.
+                      Holds any read/write transactions or actual data also.
+                      Also called as Dirty Buffer.
+                      when the query is fired, all the blocks related to buffer cache are brought into and turned on.
+                      Datas are stored as blocks in the data files.
+                      Oracle formats these blocks as the size specified in the BLOCK_SIZE parameter in the parameter file.
+
+6) Redo Log Buffer => whatever transactions happens in the buffer cache, for all of it, the redo log vector gets recorded.
+                      It is more useful while instance recovery or database crash happens.
+
+************************************************************************************************************************************************************
+
+Background Processes Components : 
+
+-> SMON, PMON, CKPT(check point), DBWn(db writer), LGWR(log writer), RECO(recoverer), ARCn(archiver)
+
+DBWn => writes all the transactions happened in the DB Buffer Cache.
+        DB writer will write into the datafiles of database based upon certain conditions like 
+               i) when the checkpoint happens or when the DB Buffer cache is one-third full, etc...
+
+LGWR => whenever the redo log vector returns the transactions to the redo log buffer cache, the LGWR will write it to the 
+        online redo log file component in the database.
+        Llog writer will write into the logfiles of database based upon certain conditions like 
+               i) when the checkpoint happens or when the DB Buffer cache is one-third full, etc...
+
+PMON => registering the database service provided from the client request to the Listeners.
+        It cleans up the unused database objects, sessions when idle session timeout.
+
+SMON => It is mainly used in Instance recovery. when database crashes and when we restart it again, smon comes into picture and do the instance recovery
+        It frequenty cleans up the unused DB objects also.
+
+CKPT => lot of SCN(System Change Number) will be generating automatically.
+        This CKPT will keep on updating it into the control header and data files header of the database to keep them in sync.
+        This checkpoint happens based on different scenarios.
+
+RECO => whenever we do remote transactions, involving multiple databases, when we are waiting for the response from other db's
+   it will be turned as an in-doubt transaction. recoverer checks and cleans it up.
+
+ARCn => Eg: whenever the LGWR is writing the logs, it writes in log1, then when its full, goes to log2.
+            when log2 is full, ARCn will take a backup of log1 into the archived redo log files buffer and then writes again in log1. this goes on...
+
+-> server Process will do both the tasks like writing from DB buffer cache to the data files as well as from data files to 
+   the DB buffer cache, where the buffer cache results will be sent back to the client query as their response.
+
+************************************************************************************************************************************************************
+
+Database Component :
+
+-> It has various components like Control files, Data files, Online redo log files, password files, parameter files, 
+   Alert log files, trace files, etc...
+
+Control Files => It has the core informations like the DB creation information, SCN number, data file location, redo log 
+                 file location, structure of the data files, BLOCK_SIZE, etc...
+                 It is the core file and without it, we cannot start the database.
+
+Data Files => It is the main file which actually holds the end user data.
+              Datas are stored as blocks in the data files.
+              Oracle formats these blocks as the size specified in the BLOCK_SIZE parameter in the parameter file.
+              Contains System meta datas.
+              contains User data files which are a part of user defined table spaces.
+              holds UNDO data files -> contains old values of DML statements which facilitates to roll back to the transactions.
+              contains Temp files -> whenever we give sort/join, it need some work space to sort the data and give it. 
+                                     sorting can happen in the memory. if its insufficient, it can make use of temp file.
+
+Online Redo Log Files => whatever transactions have been done/saved in the DB buffer cache, those transactions are returned to
+                         the redo log cache vector and they are logged into Redo log files using LGWR
+                         It ensures the performance of the datafiles and used mainly for data recovery.
+
+Password Files => contains some password which are used to connect to the database remotely and do some tasks.
+
+Parameter Files => It is a key-value pair which consists of the database parameter.
+                   whenever we do database startup, it will be read and the parameters will be checked and initialized.
+                   P-file -> Parameter File(changes made in the instance should be manually updpated)
+                   SP-file -> Server Parameter File(changes made in the instance will be automatically updpated) 
+
+Alert Log files => whenever there is any error or warning occur, it will be notes here will is used for troubleshooting later.
+
+Trace Files => contains more detailed info about those errors/warnings.
+
+
+############################################################################################################################################################
+
+SELECT statement Processing in Oracle Database : 
+
+-> when the client gives the DB connection request, the Listener will authenticate for that with the connection properties.
+-> once the connection is successfully established by the listener, a server process(SP) will be started.
+-> SP will bring the query into the SGA memory -> shared pool -> Library cache.
+-> A hash(a hexadecial values generated based on the text in SQL query) will be created for the query.
+-> If the query is already been processed, there exists an SQL area for it. if not, a new SQL area will be created.
+-> next happens the PARSE process( includes 3 steps like SYNTAX, SEMANTICS, PREVILEDGES)
+
+SYNTAX => whether the query is syntatically correct or not.
+
+SEMANTICS => The SP will verify the data dictionary cache Whether the columns and table name mentioned in the query 
+             are proper and available in the data file blocks.
+
+PREVILEDGES => checks whether the user is accesible to the mentioned table/columns.
+
+-> next happens the EXECUTION process
+-> Here the OPTIMIZER comes into picture. It will give a EXECUTION PLAN as how the query is going to be executed.
+-> Then the server process will execute the query, brings up the required blocks into the buffer cache. Then it will be fetched
+   back to the user as a response to the query.
+
+************************************************************************************************************************************************************
+
+DML statement Processing in Oracle Database : 
+
+-> when the client gives the DB connection request, the Listener will authenticate for that with the connection properties.
+-> once the connection is successfully established by the listener, a server process(SP) will be started.
+-> SP will bring the query into the SGA memory -> shared pool -> Library cache.
+-> There exists an SQL area for it.
+-> Then the SP will get the block which should be updated from the data file blocks with a old value to the buffer cache.
+-> And also the value will be stored in the undo log file for temporary save.
+Eg: take an update query.
+-> when the new value is updated, A lock will be given and lock the block in buffer cache. the lock will exists until the commit happens.
+-> then the new value will be over written in that block as well as the undo log file. 
+-> All these transactions including the old value as well as the updated value gets stored in the redo log vector and using LGWR, it will be writen in the Redo Log file.
+-> Then the buffer cache is marked as a dirty buffer and using DBWR, it will be writen to the database file.
+
+
+************************************************************************************************************************************************************
+
+DDL statement Processing in Oracle Database : 
+
+-> DDL basically affects only the metadata, not the user data.(altering rows in system table space)
+-> Dictionary Cache will be affected when this DDL operation is performed, it will come into picture.
+-> DDL is an internal DML + an implicit commit which happens automatically.
+
+************************************************************************************************************************************************************
+
+Instance Recovery in Oracle Database : 
+
+-> Instance recovery means recovering the changes that are happened in the memory which are not written to the data files.
+-> This happens Automatically when an instance is started after an instance crash.
+-> Instance crash occurs when there is an unsynched database, it realizes that the database was not shutdown properly, no checkpoints have been given
+   when the database is being closed, etc..
+-> To recover the instance, it will read till the last checkpoint in the redo log file.
+-> All the redo entries beyond that check point has to be recovered/applied.
+-> It can be done by RoleBack/Role Forward.
+
+RoleForward => Transactions that are commited, but not yet written to the data files have to be written.
+               It is mandatory to be completed before an instance opened up for the user.
+               Simply means apply committed data to data files.
+
+RoleBack => Dirty Buffer(changed blocks) are written to the data files, but the transactions are not committed, hence have to be rolled back.
+            It can happen in the background after the user opens up the instance.
+            Simply means remove uncommitted data from data files.
+
+
+############################################################################################################################################################
+
+
+
+
+
+
+
